@@ -1,0 +1,598 @@
+<html>
+	<script>
+let data = [];
+let dicebank = [];
+let static_bonus = 0;
+const range = (start, stop, step) => Array.from({ length: (stop - start) / step + 1}, (_, i) => start + (i * step));
+
+function dicepool(faces, name, poolsize=1) {
+	this.faces=faces;
+	this.name=name;
+	this.poolsize=poolsize;
+	
+	this.get_name = function() {
+	   return this.name;
+	}
+
+	this.get_diesize = function() {
+	   return this.faces.length;
+	}
+
+	this.get_poolsize = function() {
+	   return this.poolsize;
+	}
+	
+	this.inc_pool = function() {
+	   this.poolsize++;
+	}
+	
+	this.roll = function() {
+		let results = [];
+		for(let x=0; x<this.poolsize; x++) {
+			results.push(this.faces[Math.floor(Math.random() * this.faces.length)]);
+		}
+		return{poolname:this.poolsize.toString() + this.name, results:results};
+	}
+}
+
+function existing_subpool(str) {
+	for(let x=0; x < dicebank.length; x++) {
+		if (dicebank[x].get_name() == str) return x;
+	}
+	return -1;
+}
+
+function update_display() {
+   let str = "";
+   for(let x=0; x < dicebank.length; x++) {
+        str += dicebank[x].get_poolsize() + dicebank[x].get_name();
+		str += " + ";
+   }
+   str = str.substr(0, str.length - 3);
+   if(static_bonus < 0) {
+		str += " - " + Math.abs(static_bonus).toString();
+   }
+   if(static_bonus > 0) {
+		str += " + " + static_bonus.toString();		
+   }   
+   if(str == "") str = "&nbsp;"
+   document.getElementById('pooldetails').innerHTML = str;
+}
+
+function update_dicebank(arr, str) {
+   let index = existing_subpool(str);
+   if(index == -1)  dicebank.push(new dicepool(arr, str, 1));
+   else dicebank[index].inc_pool();
+   update_display();
+}
+
+function update_static_bonus(d) {
+	if(d == -1) static_bonus--;
+	else static_bonus++;
+    update_display();	
+}   
+  
+function reset() {
+    dicebank = [];
+	static_bonus = 0;
+    update_display();		
+}
+
+function toggle_order(index) {
+	let unsorted = "diceresults" + index.toString();
+	let sorted = "sortedresults" + index.toString();	
+	if(document.getElementById(sorted).style.display == "inline") {
+		document.getElementById(sorted).style.display = "none";
+		document.getElementById(unsorted).style.display = "inline";		
+	}
+	else {
+		document.getElementById(sorted).style.display = "inline";
+		document.getElementById(unsorted).style.display = "none";		
+	}
+}
+
+function roll_all() {
+	let total = 0;
+	let subpools = [];
+	for(let i=0; i < dicebank.length; i++) {
+		let subtotal = 0;
+		ind_vals = [];
+		let roll = dicebank[i].roll();
+		for(let x=0; x < roll.results.length; x++) {
+			if(isNaN(roll.results[x])) {}
+			else {
+				total += Number(roll.results[x]);
+				subtotal += Number(roll.results[x]);
+			}
+			ind_vals.push(roll.results[x]);
+		}
+		let str = ind_vals.join(", ");
+		let sorted = ind_vals.sort(function(a, b){return a-b}).join(", ");
+		subpools.push({subpool:roll.poolname, results:str, sortedresults:sorted, subtotal:subtotal});
+	}
+	if(static_bonus != 0) {
+		total += static_bonus;
+		subpools.push({subpool:"Static", results:static_bonus.toString(), sortedresults:static_bonus.toString(), subtotal:static_bonus});
+	}
+	return {total:total, subpools:subpools};
+}
+
+function roll() {
+	if(dicebank.length == 0 && static_bonus == 0) {}
+	else {
+		let results = roll_all();
+		document.getElementById('total').innerHTML = "Total: " + results.total.toString();
+		if(document.getElementById('subpools')) {
+			document.getElementById('subpools').remove();
+		}
+		let subpools = document.createElement('div');
+		subpools.id = "subpools";
+		document.getElementById('breakdown').appendChild(subpools);		
+		for(let x=0; x < results.subpools.length; x++) {
+			let span = document.createElement('span');
+			subpools.appendChild(span);	
+			span.classList.add('diceline');
+			span.addEventListener('click', (function() {
+				let z = x;
+				return function() {
+				     toggle_order(z);
+				  }
+				}
+			)());			
+			span.id = "subpool" + x.toString();
+			let dicetype = document.createElement('span');
+			span.appendChild(dicetype);
+			dicetype.classList.add('dicetype');
+			dicetype.textContent = results.subpools[x].subpool + ":  ";
+			let diceresults = document.createElement('span');
+			diceresults.classList.add('diceresults');
+			span.appendChild(diceresults);
+			diceresults.style.display = "inline";
+			diceresults.id = "diceresults" + x.toString();	
+			diceresults.textContent = results.subpools[x].results;
+			let sortedresults = document.createElement('span');
+			sortedresults.classList.add('diceresults');
+			span.appendChild(sortedresults);
+			sortedresults.style.display = "none";
+			sortedresults.id = "sortedresults" + x.toString();	
+			sortedresults.textContent = results.subpools[x].sortedresults;			
+			let dicesubtotal = document.createElement('span');
+			span.appendChild(dicesubtotal);
+			dicesubtotal.classList.add('dicesubtotal');	
+			dicesubtotal.textContent = "(" + results.subpools[x].subtotal.toString() + ")";			
+			let br = document.createElement('br');
+			subpools.appendChild(br);	
+		}
+		document.getElementById('poolcontrols').style.display = "none";
+		document.getElementById('footer1').style.display = "none";	
+		document.getElementById('resultpanel').style.display = "block";
+		document.getElementById('footer2').style.display = "block";			
+	}
+}
+
+function load_dicetypes(){
+	data = []; // clear
+	// default dice 
+	data.push({arr:range(1,4,1), name:"d4", icon:"d4"} );  
+	data.push({arr:range(1,6,1), name:"d6", icon:"d6"} );
+	data.push({arr:range(1,8,1), name:"d8", icon:"d8"} );
+	data.push({arr:range(1,10,1), name:"d10", icon:"d10"} );
+	data.push({arr:range(1,12,1), name:"d12", icon:"d12"} );
+	data.push({arr:range(1,20,1), name:"d20", icon:"d20"} );
+	data.push({arr:range(1,100,1), name:"d100", icon:"d100"} );
+	data.push({arr:[0,1,-1], name:"dF", icon:"dq"});
+	data.push({arr:["Yes", "No", "Yes And", "No And", "Yes But", "No But"], name: "dOracle", icon:"dq"});
+	// user-created dice
+	if (localStorage.getItem("userdice") === null) {}
+	else {
+		let userdice = JSON.parse(localStorage.getItem("userdice"));
+		data = data.concat(userdice);
+	}
+}
+
+function prep_dice_table() {
+	load_dicetypes();
+	if(document.getElementById('dicemenu')) {
+		document.getElementById('dicemenu').remove();
+	}
+	let table = document.createElement('table');
+	table.style.width = "72vw";	
+	table.id = "dicemenu";
+	document.getElementById('dice').appendChild(table);
+	for (let x = 0; x < data.length; x += 3) {
+		let tr = document.createElement('tr');
+		table.appendChild(tr);
+		for (let y=0; y < 3 && x + y < data.length; y++) {
+				let td = document.createElement('td');
+				td.style.width = "12vw"
+				td.style.height = "12vh"				
+				tr.appendChild(td);
+				let img = document.createElement('img');
+				img.src = "img/" + data[x+y].icon + ".png";
+				img.style.height = "12vh";
+				img.style.width = "12vh";	 
+				td.appendChild(img);
+				img.addEventListener('click', (function() {
+					let z = x+y;
+					return function() {
+					     update_dicebank(data[z].arr, data[z].name);
+					  }
+					}
+				)());
+				let br = document.createElement('br');
+				td.appendChild(br);				
+				let span = document.createElement('span');
+				span.textContent = data[x+y].name;
+				td.appendChild(span);
+		}
+	}
+}
+
+function prep_userdice_list() {
+	if (localStorage.getItem("userdice") === null) return;
+	let userdice = JSON.parse(localStorage.getItem("userdice"));
+	if(document.getElementById('userdicelist')) {
+		document.getElementById('userdicelist').remove();
+	}
+	if (userdice.length == 0) return;
+	let userdicelist = document.createElement('div');
+	userdicelist.id = "userdicelist";
+	document.getElementById('userdice').appendChild(userdicelist);	
+	for(let x=0; x < userdice.length; x++) {
+		let p = document.createElement('p');
+		userdicelist.appendChild(p);
+		let cb = document.createElement('input');
+		cb.type = 'checkbox';
+		cb.id = "cb" + x.toString();
+		p.appendChild(cb);
+		let name = document.createElement('span');
+		name.classList.add('userdicename');
+		name.textContent = " " + userdice[x].name;
+		p.appendChild(name);
+		p.appendChild(document.createElement('br'));
+		let faces = document.createElement('span');
+		faces.classList.add('userdicecontent');
+		faces.textContent = userdice[x].arr.join();	
+		p.appendChild(faces);
+	}
+	var button = document.createElement("button");
+	button.innerHTML = "Delete selected";
+	userdicelist.appendChild(button);
+	button.addEventListener('click', function() {delete_selected_userdice();});
+}
+
+function edit() {
+	prep_userdice_list();
+	document.getElementById('editpanel').style.display = "block";
+	document.getElementById('footer3').style.display = "block";
+	document.getElementById('poolcontrols').style.display = "none";
+	document.getElementById('footer1').style.display = "none";	
+}
+
+function save_die() {
+	let name = document.getElementById('newdiename').value;
+	let faces = document.getElementById('newdievalues').value;	
+	if(name == '' || faces == '') return;
+	name = check_name(name);
+	let arr = faces.split(",");
+	if (localStorage.getItem("userdice") === null) {
+		localStorage.setItem("userdice", JSON.stringify([{arr:arr, name:name, icon:'dq'}]));	
+	}
+	else {
+		let userdice = JSON.parse(localStorage.getItem("userdice"));
+		userdice.push({arr:arr, name:name, icon:'dq'});
+		localStorage.setItem("userdice", JSON.stringify(userdice));
+	}	
+	prep_userdice_list(); 
+	load_dicetypes(); 
+}
+
+function check_name(name) {
+	var n = name;
+	for(let x=0; x < data.length; x++) {
+		if(n == data[x].name) {
+				n = n + "_";
+			}
+	}
+	return n;
+}
+
+function delete_selected_userdice() {
+	if (localStorage.getItem("userdice") === null) return;	
+	let userdice = JSON.parse(localStorage.getItem("userdice"));
+	let cull = [];
+	for(let x=0; x < userdice.length; x++) {
+		if(document.getElementById('cb' + x.toString()).checked) {
+			cull.push(x);
+		}
+	}
+	for(let x=cull.length - 1; x >= 0; x--) {
+		userdice.splice(cull[x], 1);
+	}
+	localStorage.setItem("userdice", JSON.stringify(userdice));
+	prep_userdice_list(); 
+	load_dicetypes(); 
+}
+
+function close_results() {
+	document.getElementById('resultpanel').style.display = "none";
+	document.getElementById('footer2').style.display = "none";
+	document.getElementById('poolcontrols').style.display = "block";
+	document.getElementById('footer1').style.display = "block";			
+}
+
+function close_edit() {
+	prep_dice_table();
+	document.getElementById('editpanel').style.display = "none";
+	document.getElementById('footer3').style.display = "none";
+	document.getElementById('poolcontrols').style.display = "block";
+	document.getElementById('footer1').style.display = "block";		
+}
+
+window.onload=function(){
+	prep_dice_table();
+	document.getElementById("plus").addEventListener('click', function() {update_static_bonus(+1);});
+	document.getElementById("minus").addEventListener('click', function() {update_static_bonus(-1);});
+	document.getElementById("reset").addEventListener('click', function() {reset();});
+	document.getElementById("roll").addEventListener('click', function() {roll();});
+	document.getElementById("edit").addEventListener('click', function() {edit();});
+	document.getElementById("closeresults").addEventListener('click', function() {close_results();});
+	document.getElementById("closeedit").addEventListener('click', function() {close_edit();});
+	document.getElementById("savedie").addEventListener('click', function() {save_die();});	
+};
+	</script>
+	
+	<head>
+		<title>AleaIacta</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta charset="UTF-8"> 
+		<style type="text/css">
+		body {
+			background-color:#000000;
+			display:flex;
+			justify-content:center;
+			color:#ffffff;
+			font-family:Verdana;
+		}
+
+		table, th, td {
+			vertical-align:center;	
+			text-align:center;
+			font-weight:600;
+			font-size:12px;
+			font-family:Verdana;
+			padding:7px;
+			margin:0 auto;
+		}
+
+		p {
+			padding-top:6px;
+			padding-bottom:6px
+		}
+		
+		div a:link {
+			color:#ffffff;
+			text-decoration:none; 
+		}
+		
+		div a:visited {
+			color:#ffffff;
+			text-decoration:none; 
+		}
+		
+		div a:hover {
+			color:#ffffff;
+			text-decoration:none; 
+		}
+		
+		div a:active {
+			color:#ffffff;
+			text-decoration:none; 
+		}		
+
+		h1 {
+			font-size:40px;
+			color:#ffff00;
+		}
+		
+		button {
+			background-color:#59CBE8;
+			width:20vw;
+			font-weight:600;
+			padding:2px;
+		}
+
+		.footer {
+			width:100%;
+			position:fixed;		
+			height:12vh;
+			vertical-align:sub;
+			background-color:#333333;			
+			color:#ffff00;
+			text-align:center;			
+			font-family:Verdana;
+			font-size:18px;			
+			padding-top:5px;
+			left:0px;
+			bottom:0px;
+		}
+
+		.pooldetails {
+			font-weight:600;
+			white-space:nowrap;
+			overflow-y:hidden;
+			overflow-x:hidden;
+			padding:3px;
+		}
+		
+		.userdicename {
+			font-weight:500;
+			color:#26f7fd;
+		}
+		
+		.userdicecontent {
+			font-weight:300;
+			font-size:14px;
+		}		
+
+		.diceline {
+			padding-bottom:5px;		
+		}
+		
+		.dicetype {
+			font-weight:bold;
+		}
+
+		.diceresults {
+			padding-left:12px;
+			color:#ffff00;
+		}
+		
+		.dicesubtotal {
+			padding-left:32px;
+			color:#26f7fd;			
+		}
+		
+		#breakdown {
+			font-size:25px;
+		}	
+		
+		#about {
+			padding-top:30px;
+			font-size:14px;
+		}
+		
+		#resultpanel, #editpanel {
+			display:none; 
+			text-align:left;
+		}
+		
+		#numerics {
+			align:center;
+			width:100vw;
+		}
+		
+		#footer2, #footer3 {
+			display:none;
+		}
+		
+		#exposition {
+			color:#ffff00;
+		}
+		
+		#facedefs, #userdice {
+			padding-top:30px;		
+		}
+		
+		#textarea-container, #button-container {
+			padding-top:15px;
+			padding-left:15px;		
+		}			
+		</style>
+	</head>
+
+	<body>
+		<div id = "resultpanel">
+			<h1 id = "total"></h1>
+			<div id = "breakdown"></div>
+			<div id = "about">
+			(Tap the individual entries to sort them numerically; tap again to unsort them)<br /><br />
+			About this app:<br /><br />
+			AleaIacta RPG dice roller by Gerard Grey (<a href="https://kernow.me/" target="_blank">https://kernow.me/</a>)<br /><br />
+			Dice icons courtesy of Delapouite (<a href="https://delapouite.com/" target="_blank">https://delapouite.com/</a>) and Skoll (<a href="https://game-icons.net/" target="_blank">https://game-icons.net/</a>), licensed under version 3.0 of the Creative Commons CC-BY license.
+			</div>
+		</div>
+
+		<div id = "editpanel">
+			<div>
+			Name of new die:&nbsp;
+			<input type="text" id="newdiename" name="newdiename" size=10>
+			</div>			
+			<div id = "facedefs">
+			Enter a list of comma-separated values into the text box below.<br />
+			For example: <span id="exposition">1,2,4,8,16,32</span><br />
+			or <span id="exposition">Dog,Cat,Cow,Donkey,Duck,Fox,Badger,Rabbit</span>
+				<br />
+				<div id="textarea-container">
+					<textarea id="newdievalues" name="newdievalues" rows="4" cols="32"></textarea>
+				</div>
+				<div id="button-container">
+					<button id="savedie">Save</button>
+				</div>
+			</div>
+			<div id = "userdice">
+			</div>
+			<div style="display:inline-block; min-height:15vh">
+			</div>			
+		</div>
+
+		<div id = "poolcontrols">
+			<div id = "dice" align="center">	
+			</div>
+			<div id = "numerics">
+				<table width="80vw">
+					<tr>
+						<td width = "10vw" height = "10vh">
+							<img id = "plus" src = "img/plus.png" style="width:10vw; height:10vw">
+						</td>
+						<td width = "10vw" height = "10vh">
+							<img id = "minus" src = "img/minus.png" style="width:10vw; height:10vw">
+						</td>
+					</tr>
+					<tr>
+						<td width = "10vw" height = "15vh" style="display:inline-block; min-height:15vh">	
+						</td>
+						<td width = "10vw" height = "15vh" style="display:inline-block; min-height:15vh">
+						</td>
+					</tr>					
+				</table>
+			</div>
+		</div>
+
+	    <div id="footer1" class="footer">
+			<div class="pooldetails" id="pooldetails">&nbsp;</div>
+			<div align="center">
+				<table width="80%">
+					<tr>
+						<td width="33%">
+							<button id="reset">Reset</button>
+						</td>
+						<td width="33%">
+							<button id="roll">Roll</button>
+						</td>
+						<td width="33%">
+							<button id="edit">Edit</button>	
+						</td>					
+					</tr>
+				</table>			
+			</div>
+	   </div>
+	   
+		<div id="footer2" class="footer">
+			<div class="pooldetails">&nbsp;</div>
+			<div align="center">
+				<table width="30%">
+					<tr>
+						<td>
+							<button id="closeresults">Close</button>
+						</td>
+					</tr>
+				</table>
+			</div>  
+		</div>
+		
+		<div id="footer3" class="footer">
+			<div class="pooldetails">&nbsp;</div>
+			<div align="center">
+				<table width="30%">
+					<tr>
+						<td>
+							<button id="closeedit">Close</button>
+						</td>
+					</tr>
+				</table>
+			</div>  
+		</div>		
+		
+	</body>
+</html>
